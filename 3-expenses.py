@@ -1,233 +1,352 @@
 import streamlit as st
-import json
-import os
-import uuid
-from datetime import datetime, date
-from pathlib import Path
-
 import pandas as pd
 import plotly.express as px
+import json
+import uuid
+from pathlib import Path
+from datetime import date, datetime
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# =========================================================
+# PAGE CONFIGURATION
+# =========================================================
 
 st.set_page_config(
-    page_title="💰 Smart Expense Tracker",
+    page_title="Smart Expense Tracker",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+# =========================================================
+# FILE LOCATIONS
+# =========================================================
 
 DATA_DIR = Path("data")
 EXPENSE_FILE = DATA_DIR / "expenses.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 
 
-# ============================================================
+# =========================================================
 # CUSTOM CSS
-# ============================================================
+# =========================================================
 
-st.markdown("""
-<style>
-    .main {
-        background-color: #f7f9fc;
-    }
+st.markdown(
+    """
+    <style>
+
+    /* =====================================================
+       GENERAL LAYOUT
+       ===================================================== */
 
     .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 2rem;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        max-width: 1400px;
     }
 
-    .app-title {
-        font-size: 42px;
-        font-weight: 800;
-        margin-bottom: 0;
+    /* Main headings */
+    h1, h2, h3 {
+        color: #f8fafc !important;
     }
 
-    .subtitle {
-        color: #667085;
-        font-size: 17px;
-        margin-bottom: 25px;
+    /* Captions */
+    [data-testid="stCaptionContainer"] {
+        color: #94a3b8 !important;
     }
 
-    .metric-card {
-        background: white;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.06);
-        border: 1px solid #eaecf0;
+
+    /* =====================================================
+       METRIC CARDS
+       ===================================================== */
+
+    [data-testid="stMetric"] {
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-radius: 14px !important;
+        padding: 15px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.20);
     }
+
+    [data-testid="stMetricLabel"] {
+        color: #cbd5e1 !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: #ffffff !important;
+        font-size: 25px !important;
+        font-weight: 700 !important;
+    }
+
+    [data-testid="stMetricDelta"] {
+        color: #94a3b8 !important;
+    }
+
+
+    /* =====================================================
+       SIDEBAR
+       ===================================================== */
+
+    section[data-testid="stSidebar"] {
+        background: #20212a;
+    }
+
+
+    /* =====================================================
+       BUTTONS
+       ===================================================== */
+
+    div.stButton > button {
+        border-radius: 9px;
+        font-weight: 600;
+    }
+
+
+    /* =====================================================
+       ALERT BOXES
+       ===================================================== */
 
     .success-box {
-        padding: 15px;
-        border-radius: 12px;
-        background: #ecfdf3;
-        border: 1px solid #abefc6;
+        background: #052e1b;
+        border: 1px solid #166534;
+        border-radius: 10px;
+        padding: 12px;
+        color: #bbf7d0;
     }
 
     .warning-box {
-        padding: 15px;
-        border-radius: 12px;
-        background: #fffaeb;
-        border: 1px solid #fedf89;
+        background: #422006;
+        border: 1px solid #a16207;
+        border-radius: 10px;
+        padding: 12px;
+        color: #fef08a;
     }
 
     .danger-box {
-        padding: 15px;
-        border-radius: 12px;
-        background: #fef3f2;
-        border: 1px solid #fecdca;
-    }
-
-    div[data-testid="stMetric"] {
-        background-color: white;
-        border-radius: 14px;
-        padding: 15px;
-        border: 1px solid #eaecf0;
-    }
-
-    .stButton > button {
+        background: #450a0a;
+        border: 1px solid #991b1b;
         border-radius: 10px;
-        font-weight: 600;
+        padding: 12px;
+        color: #fecaca;
     }
-</style>
-""", unsafe_allow_html=True)
 
 
-# ============================================================
-# FILE / JSON FUNCTIONS
-# ============================================================
+    /* =====================================================
+       EXPENSE CARDS
+       ===================================================== */
 
-def ensure_files():
-    """Create data folder and JSON files if they don't exist."""
+    .expense-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+    }
+
+
+    /* =====================================================
+       PROGRESS BAR
+       ===================================================== */
+
+    .stProgress > div > div > div > div {
+        border-radius: 10px;
+    }
+
+
+    /* =====================================================
+       DATAFRAME
+       ===================================================== */
+
+    [data-testid="stDataFrame"] {
+        border-radius: 10px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# =========================================================
+# CREATE DATA FILES
+# =========================================================
+
+def initialize_files():
 
     DATA_DIR.mkdir(exist_ok=True)
 
     if not EXPENSE_FILE.exists():
-        EXPENSE_FILE.write_text("[]", encoding="utf-8")
+
+        EXPENSE_FILE.write_text(
+            "[]",
+            encoding="utf-8"
+        )
 
     if not SETTINGS_FILE.exists():
+
         default_settings = {
-            "daily_limit": 1000.0,
+            "daily_limit": 1000,
             "currency": "₹",
             "warning_percentage": 80
         }
 
         SETTINGS_FILE.write_text(
-            json.dumps(default_settings, indent=4),
+            json.dumps(
+                default_settings,
+                indent=4
+            ),
             encoding="utf-8"
         )
 
 
+# =========================================================
+# JSON FUNCTIONS
+# =========================================================
+
 def load_json(file_path, default):
-    """Safely load JSON data."""
 
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
             return json.load(file)
 
-    except (json.JSONDecodeError, FileNotFoundError):
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError
+    ):
+
         return default
 
 
 def save_json(file_path, data):
-    """Save data into JSON."""
 
-    with open(file_path, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+    with open(
+        file_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            indent=4
+        )
 
 
 def load_expenses():
-    return load_json(EXPENSE_FILE, [])
+
+    return load_json(
+        EXPENSE_FILE,
+        []
+    )
 
 
 def save_expenses(expenses):
-    save_json(EXPENSE_FILE, expenses)
+
+    save_json(
+        EXPENSE_FILE,
+        expenses
+    )
 
 
 def load_settings():
+
+    default_settings = {
+        "daily_limit": 1000,
+        "currency": "₹",
+        "warning_percentage": 80
+    }
+
     return load_json(
         SETTINGS_FILE,
-        {
-            "daily_limit": 1000.0,
-            "currency": "₹",
-            "warning_percentage": 80
-        }
+        default_settings
     )
 
 
 def save_settings(settings):
-    save_json(SETTINGS_FILE, settings)
 
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-def initialize_session():
-
-    if "expenses" not in st.session_state:
-        st.session_state.expenses = load_expenses()
-
-    if "settings" not in st.session_state:
-        st.session_state.settings = load_settings()
-
-    if "editing_id" not in st.session_state:
-        st.session_state.editing_id = None
-
-    if "page" not in st.session_state:
-        st.session_state.page = "Dashboard"
-
-
-ensure_files()
-initialize_session()
-
-
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
-
-def refresh_data():
-    st.session_state.expenses = load_expenses()
-    st.session_state.settings = load_settings()
-
-
-def generate_id():
-    return str(uuid.uuid4())[:8].upper()
-
-
-def get_today_expenses():
-    today = date.today().isoformat()
-
-    return [
-        expense
-        for expense in st.session_state.expenses
-        if expense["date"] == today
-    ]
-
-
-def get_today_total():
-    return sum(
-        float(expense["amount"])
-        for expense in get_today_expenses()
+    save_json(
+        SETTINGS_FILE,
+        settings
     )
 
 
+# =========================================================
+# INITIALIZATION
+# =========================================================
+
+initialize_files()
+
+
+# =========================================================
+# SESSION STATE
+# =========================================================
+
+if "expenses" not in st.session_state:
+
+    st.session_state.expenses = load_expenses()
+
+
+if "settings" not in st.session_state:
+
+    st.session_state.settings = load_settings()
+
+
+if "page" not in st.session_state:
+
+    st.session_state.page = "📊 Dashboard"
+
+
+if "edit_id" not in st.session_state:
+
+    st.session_state.edit_id = None
+
+
+# =========================================================
+# HELPER FUNCTIONS
+# =========================================================
+
 def currency():
-    return st.session_state.settings.get("currency", "₹")
+
+    return st.session_state.settings.get(
+        "currency",
+        "₹"
+    )
 
 
-def format_money(amount):
-    return f"{currency()}{amount:,.2f}"
+def money(value):
+
+    return f"{currency()}{float(value):,.2f}"
 
 
-def expenses_dataframe():
+def generate_id():
 
-    expenses = st.session_state.expenses
+    return str(
+        uuid.uuid4()
+    )[:8].upper()
 
-    if not expenses:
+
+def today_total():
+
+    today = date.today().isoformat()
+
+    return sum(
+        float(expense["amount"])
+        for expense in st.session_state.expenses
+        if expense["date"] == today
+    )
+
+
+def create_dataframe():
+
+    if not st.session_state.expenses:
+
         return pd.DataFrame(
             columns=[
                 "id",
@@ -240,7 +359,9 @@ def expenses_dataframe():
             ]
         )
 
-    df = pd.DataFrame(expenses)
+    df = pd.DataFrame(
+        st.session_state.expenses
+    )
 
     df["amount"] = pd.to_numeric(
         df["amount"],
@@ -255,273 +376,246 @@ def expenses_dataframe():
     return df
 
 
-# ============================================================
-# DAILY LIMIT ALERT
-# ============================================================
+def refresh_data():
 
-def show_daily_alert():
-
-    today_total = get_today_total()
-
-    daily_limit = float(
-        st.session_state.settings.get(
-            "daily_limit",
-            1000
-        )
-    )
-
-    warning_percentage = float(
-        st.session_state.settings.get(
-            "warning_percentage",
-            80
-        )
-    )
-
-    if daily_limit <= 0:
-        return
-
-    percentage = (today_total / daily_limit) * 100
-
-    if today_total > daily_limit:
-
-        exceeded = today_total - daily_limit
-
-        st.markdown(
-            f"""
-            <div class="danger-box">
-                <h3>🚨 Daily Limit Exceeded!</h3>
-                <b>Today's spending:</b> {format_money(today_total)}<br>
-                <b>Daily limit:</b> {format_money(daily_limit)}<br>
-                <b>Exceeded by:</b> {format_money(exceeded)}
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    elif percentage >= warning_percentage:
-
-        remaining = daily_limit - today_total
-
-        st.markdown(
-            f"""
-            <div class="warning-box">
-                <h3>⚠️ Approaching Daily Limit</h3>
-                You have spent <b>{percentage:.0f}%</b> of today's budget.<br>
-                Remaining: <b>{format_money(remaining)}</b>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    else:
-
-        remaining = daily_limit - today_total
-
-        st.markdown(
-            f"""
-            <div class="success-box">
-                <b>🟢 Daily Budget Status:</b>
-                {format_money(remaining)} remaining today.
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    st.session_state.expenses = load_expenses()
+    st.session_state.settings = load_settings()
 
 
-# ============================================================
+# =========================================================
 # SIDEBAR
-# ============================================================
+# =========================================================
 
 with st.sidebar:
 
-    st.markdown("## 💰 Expense Tracker")
+    st.title("💰 Expense Tracker")
 
-    st.caption("Simple • Smart • Local")
+    st.caption(
+        "Simple • Fast • Local"
+    )
 
     st.divider()
 
-    pages = [
-        "Dashboard",
-        "Add Expense",
-        "Transactions",
-        "Analytics",
-        "Budget",
-        "Settings"
-    ]
-
     selected_page = st.radio(
-        "Navigation",
-        pages,
-        index=pages.index(st.session_state.page)
+        "MENU",
+        [
+            "📊 Dashboard",
+            "➕ Add Expense",
+            "📋 Transactions",
+            "📈 Analytics",
+            "🎯 Budget",
+            "⚙️ Settings"
+        ],
+        label_visibility="collapsed"
     )
 
     st.session_state.page = selected_page
 
     st.divider()
 
-    today_total = get_today_total()
-
     st.metric(
         "Today's Spending",
-        format_money(today_total)
+        money(today_total())
     )
 
     st.metric(
         "Daily Limit",
-        format_money(
-            st.session_state.settings["daily_limit"]
+        money(
+            st.session_state.settings[
+                "daily_limit"
+            ]
         )
     )
 
     st.divider()
 
-    st.caption("📁 Storage")
+    st.caption("💾 Storage")
     st.caption("Local JSON files")
-    st.caption("No database required")
+    st.caption("🗄️ No database")
 
 
-# ============================================================
-# HEADER
-# ============================================================
+# =========================================================
+# MAIN HEADER
+# =========================================================
 
-st.markdown(
-    '<div class="app-title">💰 Smart Expense Tracker</div>',
-    unsafe_allow_html=True
+st.title(
+    "💰 Smart Expense Tracker"
 )
 
-st.markdown(
-    '<div class="subtitle">'
-    'Track your money, understand your spending, and stay within budget.'
-    '</div>',
-    unsafe_allow_html=True
+st.caption(
+    "Track expenses • Control your budget • Understand your spending"
 )
 
 
-# ============================================================
-# GLOBAL DAILY ALERT
-# ============================================================
+# =========================================================
+# DAILY LIMIT ALERT
+# =========================================================
 
-show_daily_alert()
+daily_limit = float(
+    st.session_state.settings[
+        "daily_limit"
+    ]
+)
 
-st.write("")
+spent_today = today_total()
+
+warning_percentage = float(
+    st.session_state.settings.get(
+        "warning_percentage",
+        80
+    )
+)
+
+if daily_limit > 0:
+
+    usage_percentage = (
+        spent_today / daily_limit
+    ) * 100
+
+    if usage_percentage >= 100:
+
+        exceeded = (
+            spent_today - daily_limit
+        )
+
+        st.markdown(
+            f"""
+            <div class="danger-box">
+                🚨 <b>Daily Limit Exceeded!</b><br>
+                Today's spending:
+                <b>{money(spent_today)}</b><br>
+                Daily limit:
+                <b>{money(daily_limit)}</b><br>
+                Exceeded by:
+                <b>{money(exceeded)}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    elif usage_percentage >= warning_percentage:
+
+        remaining = (
+            daily_limit - spent_today
+        )
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+                ⚠️ <b>Approaching Daily Limit</b><br>
+                You have used
+                <b>{usage_percentage:.0f}%</b>
+                of today's budget.<br>
+                Remaining:
+                <b>{money(remaining)}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
-# ============================================================
+# =========================================================
 # DASHBOARD
-# ============================================================
+# =========================================================
 
-if st.session_state.page == "Dashboard":
+if st.session_state.page == "📊 Dashboard":
 
-    df = expenses_dataframe()
+    st.subheader("📊 Overview")
 
-    total_expense = (
-        float(df["amount"].sum())
+    df = create_dataframe()
+
+    total_spent = (
+        df["amount"].sum()
         if not df.empty
         else 0
     )
 
-    today_total = get_today_total()
-
-    transaction_count = len(st.session_state.expenses)
+    transaction_count = len(df)
 
     highest_expense = (
-        float(df["amount"].max())
+        df["amount"].max()
         if not df.empty
         else 0
     )
 
-    daily_limit = float(
-        st.session_state.settings["daily_limit"]
-    )
+    # -----------------------------------------------------
+    # METRICS
+    # -----------------------------------------------------
 
-    remaining = daily_limit - today_total
+    col1, col2, col3, col4 = st.columns(4)
 
-    # -------------------------------
-    # Metrics
-    # -------------------------------
+    with col1:
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    with c1:
         st.metric(
-            "💸 Total Spending",
-            format_money(total_expense)
+            "💸 Total Spent",
+            money(total_spent)
         )
 
-    with c2:
+    with col2:
+
         st.metric(
             "📅 Today",
-            format_money(today_total)
+            money(spent_today)
         )
 
-    with c3:
+    with col3:
+
         st.metric(
             "🧾 Transactions",
             transaction_count
         )
 
-    with c4:
+    with col4:
+
         st.metric(
             "🔥 Highest Expense",
-            format_money(highest_expense)
+            money(highest_expense)
         )
 
-    with c5:
+    # -----------------------------------------------------
+    # BUDGET
+    # -----------------------------------------------------
 
-        if remaining >= 0:
-            st.metric(
-                "💰 Remaining",
-                format_money(remaining)
-            )
-        else:
-            st.metric(
-                "🚨 Over Budget",
-                format_money(abs(remaining))
-            )
-
-    st.write("")
-
-    # -------------------------------
-    # Budget Progress
-    # -------------------------------
-
-    st.subheader("🎯 Today's Budget")
+    st.subheader(
+        "🎯 Today's Budget"
+    )
 
     if daily_limit > 0:
 
         progress = min(
-            today_total / daily_limit,
+            spent_today / daily_limit,
             1.0
         )
 
         st.progress(progress)
 
-        percentage = (
-            today_total / daily_limit
-        ) * 100
-
-        st.write(
-            f"**{format_money(today_total)}** "
-            f"of **{format_money(daily_limit)}** "
-            f"used ({percentage:.1f}%)"
+        st.caption(
+            f"{money(spent_today)} used "
+            f"of {money(daily_limit)}"
         )
 
-    st.divider()
-
-    # -------------------------------
-    # Charts
-    # -------------------------------
+    # -----------------------------------------------------
+    # CHARTS
+    # -----------------------------------------------------
 
     if not df.empty:
 
-        col1, col2 = st.columns(2)
+        st.subheader(
+            "📊 Spending Overview"
+        )
 
-        with col1:
+        chart_col1, chart_col2 = st.columns(2)
 
-            st.subheader("🍕 Spending by Category")
+        # -------------------------------------------------
+        # PIE CHART
+        # -------------------------------------------------
+
+        with chart_col1:
 
             category_data = (
-                df.groupby("category")["amount"]
+                df.groupby(
+                    "category"
+                )["amount"]
                 .sum()
                 .reset_index()
             )
@@ -530,15 +624,22 @@ if st.session_state.page == "Dashboard":
                 category_data,
                 names="category",
                 values="amount",
-                hole=0.45
+                hole=0.45,
+                title="🍕 Spending by Category"
             )
 
             fig.update_layout(
+                height=350,
                 margin=dict(
-                    t=20,
-                    b=20,
-                    l=20,
-                    r=20
+                    t=55,
+                    b=10,
+                    l=10,
+                    r=10
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(
+                    color="white"
                 )
             )
 
@@ -547,28 +648,46 @@ if st.session_state.page == "Dashboard":
                 use_container_width=True
             )
 
-        with col2:
+        # -------------------------------------------------
+        # DAILY BAR CHART
+        # -------------------------------------------------
 
-            st.subheader("📈 Spending Trend")
+        with chart_col2:
 
             daily_data = (
-                df.groupby("date")["amount"]
+                df.groupby(
+                    "date"
+                )["amount"]
                 .sum()
                 .reset_index()
             )
 
-            daily_data = daily_data.sort_values("date")
-
-            fig = px.line(
+            fig = px.bar(
                 daily_data,
                 x="date",
                 y="amount",
-                markers=True
+                title="📅 Daily Spending"
             )
 
             fig.update_layout(
-                xaxis_title="Date",
-                yaxis_title=f"Amount ({currency()})"
+                height=350,
+                margin=dict(
+                    t=55,
+                    b=10,
+                    l=10,
+                    r=10
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(
+                    color="white"
+                ),
+                xaxis=dict(
+                    title="Date"
+                ),
+                yaxis=dict(
+                    title=f"Amount ({currency()})"
+                )
             )
 
             st.plotly_chart(
@@ -576,45 +695,58 @@ if st.session_state.page == "Dashboard":
                 use_container_width=True
             )
 
-        # -------------------------------
-        # Recent Transactions
-        # -------------------------------
+        # -------------------------------------------------
+        # RECENT TRANSACTIONS
+        # -------------------------------------------------
 
-        st.subheader("🕒 Recent Transactions")
+        st.subheader(
+            "🕒 Recent Transactions"
+        )
 
         recent = df.sort_values(
-            "date",
+            ["date", "time"],
             ascending=False
         ).head(5)
 
-        display_df = recent.copy()
+        for _, row in recent.iterrows():
 
-        display_df["date"] = (
-            display_df["date"]
-            .dt.strftime("%d-%m-%Y")
-        )
+            c1, c2, c3, c4 = st.columns(
+                [1.3, 2.3, 2, 1.2]
+            )
 
-        display_df["amount"] = (
-            display_df["amount"]
-            .map(lambda x: format_money(x))
-        )
+            with c1:
 
-        display_df = display_df[
-            [
-                "date",
-                "time",
-                "category",
-                "description",
-                "amount",
-                "payment_method"
-            ]
-        ]
+                st.write(
+                    row["date"].strftime(
+                        "%d-%m-%Y"
+                    )
+                )
 
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True
-        )
+                st.caption(
+                    row["time"]
+                )
+
+            with c2:
+
+                st.write(
+                    f"**{row['category']}**"
+                )
+
+                st.caption(
+                    row["description"]
+                )
+
+            with c3:
+
+                st.write(
+                    f"💳 {row['payment_method']}"
+                )
+
+            with c4:
+
+                st.write(
+                    f"**{money(row['amount'])}**"
+                )
 
     else:
 
@@ -624,13 +756,15 @@ if st.session_state.page == "Dashboard":
         )
 
 
-# ============================================================
+# =========================================================
 # ADD EXPENSE
-# ============================================================
+# =========================================================
 
-elif st.session_state.page == "Add Expense":
+elif st.session_state.page == "➕ Add Expense":
 
-    st.subheader("➕ Add New Expense")
+    st.subheader(
+        "➕ Add New Expense"
+    )
 
     with st.form("add_expense_form"):
 
@@ -646,8 +780,8 @@ elif st.session_state.page == "Add Expense":
             amount = st.number_input(
                 f"💰 Amount ({currency()})",
                 min_value=0.01,
-                step=10.0,
-                format="%.2f"
+                value=100.0,
+                step=10.0
             )
 
             category = st.selectbox(
@@ -691,131 +825,107 @@ elif st.session_state.page == "Add Expense":
             )
 
         submitted = st.form_submit_button(
-            "➕ Add Expense",
+            "💾 Save Expense",
             use_container_width=True
         )
 
         if submitted:
 
-            if amount <= 0:
+            new_expense = {
 
-                st.error(
-                    "Amount must be greater than zero."
-                )
+                "id":
+                    generate_id(),
 
-            else:
+                "date":
+                    expense_date.isoformat(),
 
-                new_expense = {
-                    "id": generate_id(),
-                    "date": expense_date.isoformat(),
-                    "time": expense_time.strftime("%H:%M"),
-                    "amount": float(amount),
-                    "category": category,
-                    "description": description.strip()
-                    if description.strip()
-                    else "No description",
-                    "payment_method": payment_method
-                }
+                "time":
+                    expense_time.strftime(
+                        "%H:%M"
+                    ),
 
-                st.session_state.expenses.append(
-                    new_expense
-                )
+                "amount":
+                    float(amount),
 
-                save_expenses(
-                    st.session_state.expenses
-                )
+                "category":
+                    category,
 
-                st.success(
-                    "✅ Expense added successfully!"
-                )
+                "description":
+                    description.strip()
+                    or "No description",
 
-                st.rerun()
+                "payment_method":
+                    payment_method
+            }
+
+            st.session_state.expenses.append(
+                new_expense
+            )
+
+            save_expenses(
+                st.session_state.expenses
+            )
+
+            st.success(
+                "✅ Expense added successfully!"
+            )
+
+            st.rerun()
 
 
-# ============================================================
+# =========================================================
 # TRANSACTIONS
-# ============================================================
+# =========================================================
 
-elif st.session_state.page == "Transactions":
+elif st.session_state.page == "📋 Transactions":
 
-    st.subheader("📋 All Transactions")
+    st.subheader(
+        "📋 Transactions"
+    )
 
-    if not st.session_state.expenses:
+    df = create_dataframe()
+
+    if df.empty:
 
         st.info(
-            "No transactions available."
+            "No transactions found."
         )
 
     else:
 
-        df = expenses_dataframe()
-
-        # -------------------------------
-        # Search
-        # -------------------------------
-
-        search = st.text_input(
-            "🔎 Search expenses",
-            placeholder="Search by description or category..."
-        )
-
-        if search:
-
-            search_lower = search.lower()
-
-            mask = (
-                df["description"]
-                .astype(str)
-                .str.lower()
-                .str.contains(search_lower)
-                |
-                df["category"]
-                .astype(str)
-                .str.lower()
-                .str.contains(search_lower)
-            )
-
-            df = df[mask]
-
-        # -------------------------------
-        # Filters
-        # -------------------------------
+        # -------------------------------------------------
+        # FILTERS
+        # -------------------------------------------------
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
 
-            categories = [
-                "All"
-            ] + sorted(
-                df["category"].dropna().unique().tolist()
-            )
-
-            selected_category = st.selectbox(
-                "Category",
-                categories
+            search = st.text_input(
+                "🔎 Search",
+                placeholder="Search expenses..."
             )
 
         with col2:
 
-            payment_methods = [
+            categories = [
                 "All"
             ] + sorted(
-                df["payment_method"]
+                df["category"]
                 .dropna()
                 .unique()
                 .tolist()
             )
 
-            selected_payment = st.selectbox(
-                "Payment Method",
-                payment_methods
+            category_filter = st.selectbox(
+                "🏷️ Category",
+                categories
             )
 
         with col3:
 
-            sort_order = st.selectbox(
-                "Sort",
+            sort_option = st.selectbox(
+                "↕️ Sort",
                 [
                     "Newest First",
                     "Oldest First",
@@ -824,35 +934,65 @@ elif st.session_state.page == "Transactions":
                 ]
             )
 
-        if selected_category != "All":
+        # -------------------------------------------------
+        # SEARCH
+        # -------------------------------------------------
+
+        if search:
+
+            search_mask = (
+
+                df["description"]
+                .astype(str)
+                .str.contains(
+                    search,
+                    case=False,
+                    na=False
+                )
+
+                |
+
+                df["category"]
+                .astype(str)
+                .str.contains(
+                    search,
+                    case=False,
+                    na=False
+                )
+            )
+
+            df = df[search_mask]
+
+        # -------------------------------------------------
+        # CATEGORY FILTER
+        # -------------------------------------------------
+
+        if category_filter != "All":
 
             df = df[
                 df["category"]
-                == selected_category
+                == category_filter
             ]
 
-        if selected_payment != "All":
+        # -------------------------------------------------
+        # SORT
+        # -------------------------------------------------
 
-            df = df[
-                df["payment_method"]
-                == selected_payment
-            ]
-
-        if sort_order == "Newest First":
+        if sort_option == "Newest First":
 
             df = df.sort_values(
                 ["date", "time"],
                 ascending=False
             )
 
-        elif sort_order == "Oldest First":
+        elif sort_option == "Oldest First":
 
             df = df.sort_values(
                 ["date", "time"],
                 ascending=True
             )
 
-        elif sort_order == "Highest Amount":
+        elif sort_option == "Highest Amount":
 
             df = df.sort_values(
                 "amount",
@@ -866,33 +1006,37 @@ elif st.session_state.page == "Transactions":
                 ascending=True
             )
 
-        st.write(
-            f"Showing **{len(df)}** transaction(s)"
+        st.caption(
+            f"Showing {len(df)} transaction(s)"
         )
 
-        # -------------------------------
-        # Transaction Cards
-        # -------------------------------
+        # -------------------------------------------------
+        # TRANSACTION CARDS
+        # -------------------------------------------------
 
         for _, row in df.iterrows():
 
-            with st.container(border=True):
+            with st.container(
+                border=True
+            ):
 
-                col1, col2, col3, col4 = st.columns(
-                    [1.2, 2, 2, 1.5]
+                c1, c2, c3, c4 = st.columns(
+                    [1.3, 2.5, 1.5, 1.6]
                 )
 
-                with col1:
+                with c1:
 
                     st.write(
-                        f"📅 {row['date'].strftime('%d-%m-%Y')}"
+                        row["date"].strftime(
+                            "%d-%m-%Y"
+                        )
                     )
 
                     st.caption(
-                        f"⏰ {row['time']}"
+                        row["time"]
                     )
 
-                with col2:
+                with c2:
 
                     st.write(
                         f"**{row['category']}**"
@@ -902,59 +1046,76 @@ elif st.session_state.page == "Transactions":
                         row["description"]
                     )
 
-                with col3:
+                with c3:
 
                     st.write(
                         f"💳 {row['payment_method']}"
                     )
 
+                with c4:
+
                     st.write(
-                        f"### {format_money(row['amount'])}"
+                        f"**{money(row['amount'])}**"
                     )
 
-                with col4:
+                    edit_col, delete_col = st.columns(2)
 
-                    if st.button(
-                        "✏️ Edit",
-                        key=f"edit_{row['id']}"
-                    ):
+                    with edit_col:
 
-                        st.session_state.editing_id = row["id"]
+                        if st.button(
+                            "✏️",
+                            key=f"edit_{row['id']}"
+                        ):
 
-                    if st.button(
-                        "🗑️ Delete",
-                        key=f"delete_{row['id']}"
-                    ):
+                            st.session_state.edit_id = (
+                                row["id"]
+                            )
 
-                        st.session_state.expenses = [
-                            expense
-                            for expense
-                            in st.session_state.expenses
-                            if expense["id"] != row["id"]
-                        ]
+                            st.rerun()
 
-                        save_expenses(
-                            st.session_state.expenses
-                        )
+                    with delete_col:
 
-                        st.success(
-                            "Expense deleted."
-                        )
+                        if st.button(
+                            "🗑️",
+                            key=f"delete_{row['id']}"
+                        ):
 
-                        st.rerun()
+                            st.session_state.expenses = [
 
-        # -------------------------------
-        # Edit Form
-        # -------------------------------
+                                expense
 
-        if st.session_state.editing_id:
+                                for expense
+                                in st.session_state.expenses
+
+                                if expense["id"]
+                                != row["id"]
+                            ]
+
+                            save_expenses(
+                                st.session_state.expenses
+                            )
+
+                            st.success(
+                                "Expense deleted."
+                            )
+
+                            st.rerun()
+
+        # -------------------------------------------------
+        # EDIT EXPENSE
+        # -------------------------------------------------
+
+        if st.session_state.edit_id:
 
             expense = next(
                 (
-                    e for e
+                    item
+
+                    for item
                     in st.session_state.expenses
-                    if e["id"]
-                    == st.session_state.editing_id
+
+                    if item["id"]
+                    == st.session_state.edit_id
                 ),
                 None
             )
@@ -963,16 +1124,42 @@ elif st.session_state.page == "Transactions":
 
                 st.divider()
 
-                st.subheader("✏️ Edit Expense")
+                st.subheader(
+                    "✏️ Edit Expense"
+                )
 
-                with st.form("edit_expense_form"):
+                categories_list = [
+                    "Food",
+                    "Travel",
+                    "Shopping",
+                    "Bills",
+                    "Education",
+                    "Entertainment",
+                    "Health",
+                    "Groceries",
+                    "Rent",
+                    "Other"
+                ]
+
+                payment_list = [
+                    "UPI",
+                    "Cash",
+                    "Debit Card",
+                    "Credit Card",
+                    "Bank Transfer",
+                    "Other"
+                ]
+
+                with st.form(
+                    "edit_expense_form"
+                ):
 
                     col1, col2 = st.columns(2)
 
                     with col1:
 
                         edit_date = st.date_input(
-                            "Date",
+                            "📅 Date",
                             value=datetime.strptime(
                                 expense["date"],
                                 "%Y-%m-%d"
@@ -980,7 +1167,7 @@ elif st.session_state.page == "Transactions":
                         )
 
                         edit_amount = st.number_input(
-                            "Amount",
+                            "💰 Amount",
                             min_value=0.01,
                             value=float(
                                 expense["amount"]
@@ -989,31 +1176,9 @@ elif st.session_state.page == "Transactions":
                         )
 
                         edit_category = st.selectbox(
-                            "Category",
-                            [
-                                "Food",
-                                "Travel",
-                                "Shopping",
-                                "Bills",
-                                "Education",
-                                "Entertainment",
-                                "Health",
-                                "Groceries",
-                                "Rent",
-                                "Other"
-                            ],
-                            index=[
-                                "Food",
-                                "Travel",
-                                "Shopping",
-                                "Bills",
-                                "Education",
-                                "Entertainment",
-                                "Health",
-                                "Groceries",
-                                "Rent",
-                                "Other"
-                            ].index(
+                            "🏷️ Category",
+                            categories_list,
+                            index=categories_list.index(
                                 expense["category"]
                             )
                         )
@@ -1021,36 +1186,33 @@ elif st.session_state.page == "Transactions":
                     with col2:
 
                         edit_payment = st.selectbox(
-                            "Payment Method",
-                            [
-                                "UPI",
-                                "Cash",
-                                "Debit Card",
-                                "Credit Card",
-                                "Bank Transfer",
-                                "Other"
-                            ],
-                            index=[
-                                "UPI",
-                                "Cash",
-                                "Debit Card",
-                                "Credit Card",
-                                "Bank Transfer",
-                                "Other"
-                            ].index(
+                            "💳 Payment Method",
+                            payment_list,
+                            index=payment_list.index(
                                 expense["payment_method"]
                             )
                         )
 
                         edit_description = st.text_input(
-                            "Description",
+                            "📝 Description",
                             value=expense["description"]
                         )
 
                     save_edit = st.form_submit_button(
-                        "💾 Save Changes",
+                        "💾 Update Expense",
                         use_container_width=True
                     )
+
+                    cancel_edit = st.form_submit_button(
+                        "❌ Cancel",
+                        use_container_width=True
+                    )
+
+                    if cancel_edit:
+
+                        st.session_state.edit_id = None
+
+                        st.rerun()
 
                     if save_edit:
 
@@ -1062,8 +1224,8 @@ elif st.session_state.page == "Transactions":
                                     edit_date.isoformat()
                                 )
 
-                                item["amount"] = float(
-                                    edit_amount
+                                item["amount"] = (
+                                    float(edit_amount)
                                 )
 
                                 item["category"] = (
@@ -1075,14 +1237,15 @@ elif st.session_state.page == "Transactions":
                                 )
 
                                 item["description"] = (
-                                    edit_description
+                                    edit_description.strip()
+                                    or "No description"
                                 )
 
                         save_expenses(
                             st.session_state.expenses
                         )
 
-                        st.session_state.editing_id = None
+                        st.session_state.edit_id = None
 
                         st.success(
                             "✅ Expense updated successfully!"
@@ -1091,15 +1254,17 @@ elif st.session_state.page == "Transactions":
                         st.rerun()
 
 
-# ============================================================
+# =========================================================
 # ANALYTICS
-# ============================================================
+# =========================================================
 
-elif st.session_state.page == "Analytics":
+elif st.session_state.page == "📈 Analytics":
 
-    st.subheader("📊 Spending Analytics")
+    st.subheader(
+        "📈 Spending Analytics"
+    )
 
-    df = expenses_dataframe()
+    df = create_dataframe()
 
     if df.empty:
 
@@ -1109,73 +1274,84 @@ elif st.session_state.page == "Analytics":
 
     else:
 
-        # -------------------------------
-        # Category Analysis
-        # -------------------------------
-
-        st.subheader("🏷️ Category Analysis")
+        # -------------------------------------------------
+        # CATEGORY DATA
+        # -------------------------------------------------
 
         category_data = (
-            df.groupby("category")["amount"]
-            .agg(["sum", "count", "mean"])
+            df.groupby(
+                "category"
+            )["amount"]
+            .sum()
             .reset_index()
-        )
-
-        category_data.columns = [
-            "Category",
-            "Total",
-            "Transactions",
-            "Average"
-        ]
-
-        st.dataframe(
-            category_data.style.format(
-                {
-                    "Total": f"{currency()}{{:,.2f}}",
-                    "Average": f"{currency()}{{:,.2f}}"
-                }
-            ),
-            use_container_width=True,
-            hide_index=True
+            .sort_values(
+                "amount",
+                ascending=False
+            )
         )
 
         col1, col2 = st.columns(2)
 
-        with col1:
+        # -------------------------------------------------
+        # BAR CHART
+        # -------------------------------------------------
 
-            st.subheader("📊 Category Spending")
+        with col1:
 
             fig = px.bar(
                 category_data,
-                x="Category",
-                y="Total",
-                text_auto=".2f"
+                x="category",
+                y="amount",
+                title="💰 Category Spending"
             )
 
             fig.update_layout(
-                yaxis_title=f"Amount ({currency()})"
+                height=350,
+                margin=dict(
+                    t=55,
+                    b=10,
+                    l=10,
+                    r=10
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(
+                    color="white"
+                )
             )
 
             st.plotly_chart(
                 fig,
                 use_container_width=True
             )
+
+        # -------------------------------------------------
+        # DONUT CHART
+        # -------------------------------------------------
 
         with col2:
 
-            st.subheader("💳 Payment Methods")
-
-            payment_data = (
-                df.groupby("payment_method")["amount"]
-                .sum()
-                .reset_index()
+            fig = px.pie(
+                category_data,
+                names="category",
+                values="amount",
+                hole=0.45,
+                title="🍕 Spending Distribution"
             )
 
-            fig = px.pie(
-                payment_data,
-                names="payment_method",
-                values="amount",
-                hole=0.4
+            fig.update_layout(
+                height=350,
+                margin=dict(
+                    t=55,
+                    b=10,
+                    l=10,
+                    r=10
+                ),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(
+                    color="white"
+                )
             )
 
             st.plotly_chart(
@@ -1183,31 +1359,40 @@ elif st.session_state.page == "Analytics":
                 use_container_width=True
             )
 
-        # -------------------------------
-        # Monthly Analysis
-        # -------------------------------
+        # -------------------------------------------------
+        # DAILY TREND
+        # -------------------------------------------------
 
-        st.subheader("📅 Monthly Spending")
-
-        df["month"] = df["date"].dt.to_period(
-            "M"
-        ).astype(str)
-
-        monthly = (
-            df.groupby("month")["amount"]
+        daily_data = (
+            df.groupby(
+                "date"
+            )["amount"]
             .sum()
             .reset_index()
         )
 
         fig = px.line(
-            monthly,
-            x="month",
+            daily_data,
+            x="date",
             y="amount",
-            markers=True
+            markers=True,
+            title="📅 Spending Trend"
         )
 
         fig.update_layout(
-            xaxis_title="Month",
+            height=350,
+            margin=dict(
+                t=55,
+                b=10,
+                l=10,
+                r=10
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(
+                color="white"
+            ),
+            xaxis_title="Date",
             yaxis_title=f"Amount ({currency()})"
         )
 
@@ -1216,145 +1401,207 @@ elif st.session_state.page == "Analytics":
             use_container_width=True
         )
 
-        # -------------------------------
-        # Insights
-        # -------------------------------
+        # -------------------------------------------------
+        # INSIGHTS
+        # -------------------------------------------------
 
-        st.subheader("💡 Spending Insights")
-
-        highest_category = (
-            category_data
-            .sort_values(
-                "Total",
-                ascending=False
-            )
-            .iloc[0]
+        st.subheader(
+            "💡 Spending Insights"
         )
 
-        average_expense = df["amount"].mean()
+        highest_category = category_data.iloc[0]
 
-        ic1, ic2, ic3 = st.columns(3)
+        average_expense = (
+            df["amount"].mean()
+        )
 
-        with ic1:
+        total_transactions = len(df)
+
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
 
             st.metric(
-                "Most Expensive Category",
-                highest_category["Category"]
+                "🏆 Highest Category",
+                highest_category["category"]
             )
 
-        with ic2:
+        with c2:
 
             st.metric(
-                "Category Spending",
-                format_money(
-                    highest_category["Total"]
+                "💸 Category Spending",
+                money(
+                    highest_category["amount"]
                 )
             )
 
-        with ic3:
+        with c3:
 
             st.metric(
-                "Average Transaction",
-                format_money(
+                "📊 Average Expense",
+                money(
                     average_expense
                 )
             )
 
 
-# ============================================================
+# =========================================================
 # BUDGET
-# ============================================================
+# =========================================================
 
-elif st.session_state.page == "Budget":
+elif st.session_state.page == "🎯 Budget":
 
-    st.subheader("🎯 Budget Manager")
-
-    daily_limit = float(
-        st.session_state.settings["daily_limit"]
+    st.subheader(
+        "🎯 Budget Manager"
     )
 
-    today_total = get_today_total()
-
-    st.metric(
-        "Today's Spending",
-        format_money(today_total)
+    limit = float(
+        st.session_state.settings[
+            "daily_limit"
+        ]
     )
 
-    st.metric(
-        "Daily Limit",
-        format_money(daily_limit)
+    spent = today_total()
+
+    remaining = (
+        limit - spent
     )
 
-    if daily_limit > 0:
+    col1, col2, col3 = st.columns(3)
 
-        progress = min(
-            today_total / daily_limit,
-            1
+    with col1:
+
+        st.metric(
+            "🎯 Daily Limit",
+            money(limit)
         )
 
-        st.progress(progress)
+    with col2:
 
-    st.divider()
-
-    st.subheader("📅 Daily Budget Status")
-
-    if today_total > daily_limit:
-
-        st.error(
-            f"🚨 You exceeded your budget by "
-            f"{format_money(today_total - daily_limit)}"
+        st.metric(
+            "💸 Spent Today",
+            money(spent)
         )
 
-    else:
+    with col3:
 
-        st.success(
-            f"🟢 You have "
-            f"{format_money(daily_limit - today_total)} "
-            f"remaining today."
-        )
+        if remaining >= 0:
 
-    st.divider()
-
-    st.subheader("📊 Budget Tips")
-
-    if daily_limit > 0:
-
-        remaining = daily_limit - today_total
-
-        if remaining < 0:
-
-            st.warning(
-                "Try to reduce unnecessary spending "
-                "for the rest of today."
-            )
-
-        elif remaining < daily_limit * 0.2:
-
-            st.warning(
-                "You are close to your daily spending limit."
+            st.metric(
+                "💰 Remaining",
+                money(remaining)
             )
 
         else:
 
-            st.info(
-                "You are within your daily budget. 👍"
+            st.metric(
+                "🚨 Over Budget",
+                money(abs(remaining))
             )
 
+    st.write("")
 
-# ============================================================
+    if limit > 0:
+
+        progress = min(
+            spent / limit,
+            1.0
+        )
+
+        st.progress(progress)
+
+    st.write("")
+
+    if remaining < 0:
+
+        st.markdown(
+            f"""
+            <div class="danger-box">
+                🚨 You exceeded today's budget by
+                <b>{money(abs(remaining))}</b>.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    elif remaining <= limit * 0.2:
+
+        st.markdown(
+            f"""
+            <div class="warning-box">
+                ⚠️ You are close to your daily limit.<br>
+                Remaining:
+                <b>{money(remaining)}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    else:
+
+        st.markdown(
+            f"""
+            <div class="success-box">
+                🟢 You are within your daily budget.<br>
+                Remaining:
+                <b>{money(remaining)}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    st.subheader(
+        "💡 Budget Tips"
+    )
+
+    if remaining < 0:
+
+        st.write(
+            "🔴 Your spending is above today's limit. "
+            "Review your recent transactions."
+        )
+
+    elif remaining <= limit * 0.2:
+
+        st.write(
+            "🟡 You have less than 20% of your "
+            "daily budget remaining."
+        )
+
+    else:
+
+        st.write(
+            "🟢 Good job! Your spending is currently "
+            "within your daily budget."
+        )
+
+
+# =========================================================
 # SETTINGS
-# ============================================================
+# =========================================================
 
-elif st.session_state.page == "Settings":
+elif st.session_state.page == "⚙️ Settings":
 
-    st.subheader("⚙️ Settings")
+    st.subheader(
+        "⚙️ Settings"
+    )
 
     settings = st.session_state.settings
+
+    # -----------------------------------------------------
+    # BUDGET SETTINGS
+    # -----------------------------------------------------
+
+    st.markdown(
+        "### 🎯 Budget Settings"
+    )
 
     with st.form("settings_form"):
 
         new_limit = st.number_input(
-            "💰 Daily Expense Limit",
+            "Daily Expense Limit",
             min_value=0.0,
             value=float(
                 settings.get(
@@ -1365,31 +1612,36 @@ elif st.session_state.page == "Settings":
             step=100.0
         )
 
-        new_currency = st.selectbox(
-            "Currency",
-            [
-                "₹",
-                "$",
-                "€",
-                "£",
-                "¥"
-            ],
-            index=[
-                "₹",
-                "$",
-                "€",
-                "£",
-                "¥"
-            ].index(
-                settings.get(
-                    "currency",
-                    "₹"
-                )
-            )
+        currency_options = [
+            "₹",
+            "$",
+            "€",
+            "£",
+            "¥"
+        ]
+
+        current_currency = settings.get(
+            "currency",
+            "₹"
         )
 
-        warning_percentage = st.slider(
-            "⚠️ Warning when budget reaches",
+        currency_index = (
+            currency_options.index(
+                current_currency
+            )
+            if current_currency
+            in currency_options
+            else 0
+        )
+
+        new_currency = st.selectbox(
+            "Currency",
+            currency_options,
+            index=currency_index
+        )
+
+        new_warning = st.slider(
+            "Alert when spending reaches",
             min_value=50,
             max_value=95,
             value=int(
@@ -1401,21 +1653,33 @@ elif st.session_state.page == "Settings":
             step=5
         )
 
-        save_settings_button = st.form_submit_button(
-            "💾 Save Settings",
-            use_container_width=True
+        save_settings_button = (
+            st.form_submit_button(
+                "💾 Save Settings",
+                use_container_width=True
+            )
         )
 
         if save_settings_button:
 
-            st.session_state.settings = {
-                "daily_limit": float(new_limit),
-                "currency": new_currency,
-                "warning_percentage": warning_percentage
+            new_settings = {
+
+                "daily_limit":
+                    float(new_limit),
+
+                "currency":
+                    new_currency,
+
+                "warning_percentage":
+                    int(new_warning)
             }
 
+            st.session_state.settings = (
+                new_settings
+            )
+
             save_settings(
-                st.session_state.settings
+                new_settings
             )
 
             st.success(
@@ -1424,15 +1688,17 @@ elif st.session_state.page == "Settings":
 
             st.rerun()
 
+    # -----------------------------------------------------
+    # EXPORT
+    # -----------------------------------------------------
+
     st.divider()
 
-    # -------------------------------
-    # Export
-    # -------------------------------
+    st.subheader(
+        "📤 Export Data"
+    )
 
-    st.subheader("📤 Export Data")
-
-    df = expenses_dataframe()
+    df = create_dataframe()
 
     if not df.empty:
 
@@ -1440,7 +1706,9 @@ elif st.session_state.page == "Settings":
 
         export_df["date"] = (
             export_df["date"]
-            .dt.strftime("%Y-%m-%d")
+            .dt.strftime(
+                "%Y-%m-%d"
+            )
         )
 
         csv_data = export_df.to_csv(
@@ -1448,7 +1716,7 @@ elif st.session_state.page == "Settings":
         ).encode("utf-8")
 
         st.download_button(
-            label="📥 Download Expenses as CSV",
+            "📥 Download CSV",
             data=csv_data,
             file_name="expenses.csv",
             mime="text/csv",
@@ -1461,13 +1729,13 @@ elif st.session_state.page == "Settings":
             "No expenses available for export."
         )
 
-    st.divider()
+    # -----------------------------------------------------
+    # JSON BACKUP
+    # -----------------------------------------------------
 
-    # -------------------------------
-    # Backup
-    # -------------------------------
-
-    st.subheader("💾 Backup")
+    st.subheader(
+        "💾 JSON Backup"
+    )
 
     backup_data = json.dumps(
         st.session_state.expenses,
@@ -1482,20 +1750,20 @@ elif st.session_state.page == "Settings":
         use_container_width=True
     )
 
-    st.divider()
+    # -----------------------------------------------------
+    # RESTORE
+    # -----------------------------------------------------
 
-    # -------------------------------
-    # Import
-    # -------------------------------
-
-    st.subheader("📥 Restore JSON Backup")
+    st.subheader(
+        "📥 Restore Backup"
+    )
 
     uploaded_file = st.file_uploader(
-        "Upload expenses JSON file",
+        "Upload JSON backup",
         type=["json"]
     )
 
-    if uploaded_file:
+    if uploaded_file is not None:
 
         try:
 
@@ -1520,6 +1788,8 @@ elif st.session_state.page == "Settings":
                     "✅ Backup restored successfully!"
                 )
 
+                st.rerun()
+
             else:
 
                 st.error(
@@ -1532,13 +1802,15 @@ elif st.session_state.page == "Settings":
                 "The uploaded file is not valid JSON."
             )
 
+    # -----------------------------------------------------
+    # DANGER ZONE
+    # -----------------------------------------------------
+
     st.divider()
 
-    # -------------------------------
-    # Reset Data
-    # -------------------------------
-
-    st.subheader("⚠️ Danger Zone")
+    st.subheader(
+        "⚠️ Danger Zone"
+    )
 
     st.warning(
         "Deleting all expenses cannot be undone "
@@ -1561,13 +1833,13 @@ elif st.session_state.page == "Settings":
         st.rerun()
 
 
-# ============================================================
+# =========================================================
 # FOOTER
-# ============================================================
+# =========================================================
 
 st.divider()
 
 st.caption(
     "💰 Smart Expense Tracker • "
-    "Built with Python + Streamlit + JSON + Plotly"
+    "Python + Streamlit + JSON + Plotly"
 )
